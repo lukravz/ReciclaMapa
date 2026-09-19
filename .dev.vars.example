@@ -1,0 +1,5 @@
+# Loaded only by Wrangler/OpenNext local development. Keep production secrets out of this file.
+NEXTJS_ENV=development
+APP_ENV=development
+# APP_ORIGIN=http://localhost:3001
+# DEMO_MODE=false

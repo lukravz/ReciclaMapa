@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "reciclamapa-development",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {"directory": ".open-next/assets", "binding": "ASSETS"},
+  "services": [{"binding": "WORKER_SELF_REFERENCE", "service": "reciclamapa-development"}],
+  "vars": {"APP_ENV": "development"},
+  "d1_databases": [{"binding":"DB", "database_name":"reciclamapa-development", "database_id":"00000000-0000-0000-0000-000000000001", "migrations_dir":"migrations"}],
+  "env": {
+    "production": {
+      "name":"reciclamapa",
+      "vars":{"APP_ENV":"production", "APP_ORIGIN":"https://CONFIGURE-SEU-DOMINIO.invalid"},
+      "services":[{"binding":"WORKER_SELF_REFERENCE","service":"reciclamapa"}],
+      "d1_databases":[{"binding":"DB","database_name":"reciclamapa-production","database_id":"SUBSTITUA-PELO-ID-D1-PRODUCTION","migrations_dir":"migrations"}]
+    },
+    "demo": {
+      "name":"reciclamapa-demo",
+      "vars":{"APP_ENV":"demo","DEMO_MODE":"true"},
+      "services":[{"binding":"WORKER_SELF_REFERENCE","service":"reciclamapa-demo"}],
+      "d1_databases":[{"binding":"DB","database_name":"reciclamapa-demo","database_id":"SUBSTITUA-PELO-ID-D1-DEMO","migrations_dir":"migrations"}]
+    }
+  }
+}

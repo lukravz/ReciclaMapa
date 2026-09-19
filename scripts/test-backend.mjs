@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const base=process.env.TEST_BASE_URL??'http://localhost:3001';
+if(!['localhost','127.0.0.1'].includes(new URL(base).hostname))throw new Error('Os testes só podem executar no servidor local.');
+const credentials=JSON.parse(await readFile('.wrangler/dev-credentials.json','utf8'));
+const actors={};
+async function call(actor,path,method='GET',data,status=200){const response=await fetch(base+'/api/'+path,{method,headers:{'Content-Type':'application/json',Origin:base,...(actor?.cookie?{Cookie:actor.cookie}:{})},body:data===undefined?undefined:JSON.stringify(data)});const body=await response.json();assert.equal(response.status,status,`${method} ${path}: ${JSON.stringify(body)}`);return {body,response};}
+for(const account of credentials.accounts){const r=await call(null,'auth/login','POST',{email:account.email,password:credentials.password});const cookie=r.response.headers.get('set-cookie');assert.ok(cookie.includes('HttpOnly')&&cookie.includes('SameSite=Lax'));actors[account.role]={...account,cookie:cookie.split(';')[0]};}
+const gen=actors.generator,coop=actors.cooperative,other=actors.collector,admin=actors.admin;
+await call(gen,'admin','GET',undefined,403);
+await call(null,'auth/register','POST',{name:'Tentativa',email:'blocked@reciclamapa.invalid',password:credentials.password,role:'admin',city:'Fortaleza',state:'CE',neighborhood:'Centro'},400);
+const foreign=await fetch(base+'/api/waste',{method:'POST',headers:{Origin:'https://outro.invalid','Content-Type':'application/json',Cookie:gen.cookie},body:'{}'});assert.equal(foreign.status,403);
+const config={name:'Cooperativa fictícia QA',address:'Base fictícia · Fortaleza',city:'Fortaleza',state:'CE',lat:-3.7463,lng:-38.5385,radiusKm:20,capacityKg:300,acceptedMaterials:['Papelão','Vidro']};
+await call(coop,'cooperatives','POST',config);await call(other,'cooperatives','POST',{...config,name:'Segunda base fictícia QA'});
+const point={name:'Residência fictícia QA '+Date.now(),type:'Residência',material:'Papelão',kg:32,address:'Endereço privado de teste, 123',street:'Endereço privado de teste',number:'123',postcode:'60000-000',region:'Centro',city:'Fortaleza',state:'CE',lat:-3.734561,lng:-38.523876,availability:'Hoje',frequency:'Semanal',locationConfirmed:true};
+const {body:p}=await call(gen,'waste','POST',point);assert.equal((await call(gen,'waste/'+p.id)).body.lat,point.lat);
+const publicPoint=(await call(null,'waste/'+p.id)).body;assert.equal(publicPoint.lat,-3.73);assert.equal(publicPoint.lng,-38.52);assert.ok(!publicPoint.address.includes('123'));assert.equal(publicPoint.name,'Gerador residencial');
+await call(other,'waste/'+p.id,'PATCH',point,403);await call(gen,'waste/'+p.id,'PATCH',{...point,kg:-2},400);
+const attempts=await Promise.all([coop,other].map(actor=>fetch(base+'/api/waste/'+p.id+'/reserve',{method:'POST',headers:{'Content-Type':'application/json',Origin:base,Cookie:actor.cookie},body:'{}'})));
+assert.deepEqual(attempts.map(r=>r.status).sort(),[200,409]);const winner=attempts[0].status===200?coop:other,loser=winner===coop?other:coop;
+const reserved=(await call(gen,'waste/'+p.id)).body;assert.equal(reserved.status,'reserved');
+await call(gen,'waste/'+p.id,'PATCH',point,409);
+const {body:route}=await call(winner,'routes','POST',{ids:[p.id],start:{lat:config.lat,lng:config.lng},end:{lat:config.lat,lng:config.lng},calculate:false});assert.ok((await call(winner,'routes')).body.some(r=>r.id===route.id));
+await call(loser,'routes/'+route.id+'/schedule','POST',{date:new Date().toISOString().slice(0,10),timeWindow:'14h–16h',note:''},403);
+const date=new Date().toISOString().slice(0,10);await call(winner,'routes/'+route.id+'/schedule','POST',{date,timeWindow:'14h–16h',note:'Agendamento fictício QA'});assert.equal((await call(gen,'waste/'+p.id)).body.status,'scheduled');
+await call(winner,'routes/'+route.id+'/start','POST',{});
+await call(winner,'routes/'+route.id+'/collect','POST',{date,items:[{id:p.id,actualWeight:29.5}],distanceKm:2.3});
+await call(winner,'routes/'+route.id+'/collect','POST',{date,items:[{id:p.id,actualWeight:29.5}]},409);
+const result=(await call(winner,'impact?period=today')).body;const collection=result.collections.find(c=>c.points.some(x=>x.id===p.id));assert.equal(collection.kg,29.5);assert.equal(collection.actualDistanceKm,2.3);assert.equal(collection.route,undefined);assert.equal((await call(gen,'waste/'+p.id)).body.status,'collected');
+await call(gen,'validation','POST',{},403);await call(admin,'validation','POST',{intervieweeType:'business',city:'Cidade fictícia QA',mainProblem:'Entrevista fictícia para teste local',currentSolution:'Teste',difficulty:'Teste',wouldUse:'yes',notes:'Fixture de desenvolvimento. Não representa validação de campo.'});assert.ok((await call(admin,'validation')).body.total>=1);
+const audit=(await call(admin,'admin')).body.audit;assert.ok(audit.some(a=>a.action==='collection.completed'));
+const invalidSession=await call(gen,'auth/logout','POST',{});await call(gen,'waste','POST',point,401);
+console.log('PASS: persistência, sessão, privacidade residencial, disputa concorrente (200/409), propriedade, CSRF, RBAC, rota, agendamento, coleta com 29,5 kg reais, impacto, auditoria e logout. Fixtures somente no D1 local.');

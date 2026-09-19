@@ -1,0 +1,10 @@
+node_modules/
+.next/
+*.tsbuildinfo
+.sites-runtime/
+!.env.example
+.wrangler/
+.open-next/
+.dev.vars
+.env.local
+test-results/
