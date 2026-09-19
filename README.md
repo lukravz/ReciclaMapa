@@ -141,7 +141,7 @@ Para residências, a coordenada exata permanece privada no banco. Consultas púb
 ### Como executar a etapa 3 localmente
 
 ```powershell
-cd "C:\Users\itzlu\OneDrive\Documentos\ChatGPT\Siará Tech Summit\reciclamapa"
+
 pnpm install --frozen-lockfile
 pnpm db:generate
 pnpm db:migrate
