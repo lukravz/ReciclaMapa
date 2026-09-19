@@ -1,11 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "reciclamapa-development",
+  "name": "reciclamapa",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {"directory": ".open-next/assets", "binding": "ASSETS"},
-  "services": [{"binding": "WORKER_SELF_REFERENCE", "service": "reciclamapa-development"}],
+  "services": [{"binding": "WORKER_SELF_REFERENCE", "service": "reciclamapa"}],
   "vars": {"APP_ENV": "development"},
   "d1_databases": [{"binding":"DB", "database_name":"reciclamapa-development", "database_id":"00ed1469-bacc-4520-9b02-92c69ccd4568", "migrations_dir":"migrations"}],
   "env": {
