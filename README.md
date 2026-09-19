@@ -9,7 +9,6 @@ Evolução do MVP existente, preservando identidade visual, navegação, cadastr
 Requer Node.js 22.13+ e pnpm (há `pnpm-lock.yaml`).
 
 ```powershell
-cd "C:\Users\itzlu\OneDrive\Documentos\ChatGPT\Siará Tech Summit\reciclamapa"
 pnpm install --frozen-lockfile
 pnpm dev
 ```
