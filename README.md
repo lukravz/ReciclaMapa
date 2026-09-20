@@ -17,7 +17,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Abra [http://localhost:3001](http://localhost:3001). Com as dependências instaladas, também é possível usar `node node_modules/next/dist/bin/next dev --webpack -p 3001`. Para produção local: `pnpm build` e `pnpm start`.
+Abra [[http://localhost:3001](https://reciclamapa.nuvik.workers.dev)]. Com as dependências instaladas, também é possível usar `node node_modules/next/dist/bin/next dev --webpack -p 3001`. Para produção local: `pnpm build` e `pnpm start`.
 
 ## Bibliotecas instaladas
 
