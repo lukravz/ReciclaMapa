@@ -1,0 +1,1 @@
+export function operationalStep(status:string,inProgress=false){return status==='cancelled'?-1:status==='collected'||status==='completed'?4:status==='in_progress'||inProgress?3:status==='scheduled'?2:status==='reserved'?1:0;}

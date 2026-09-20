@@ -1,6 +1,8 @@
-# RECICLAMAPA — etapa 2
+# RECICLAMAPA — inteligência logística
 
 **Resíduos em dados. Dados em rotas.**
+
+A implementação atual e seus limites estão descritos em [IMPLEMENTATION_REPORT.md](IMPLEMENTATION_REPORT.md). As seções de etapas anteriores abaixo registram a evolução local. O projeto já possui um Worker publicado, informado pelo responsável; esta atualização ainda não foi publicada nem validada em produção.
 
 Evolução do MVP existente, preservando identidade visual, navegação, cadastros, validação, previsão por histórico e separação entre dados demonstrativos e próprios. Projeto independente na subpasta `reciclamapa`; o ATLAS da pasta superior foi preservado. Nenhum commit, push ou deploy foi realizado.
 
@@ -150,7 +152,7 @@ pnpm dev
 
 `wrangler.jsonc` define os ambientes `development`, `demo` e `production`, com D1 separado por ambiente. Os IDs no arquivo são placeholders intencionais: substitua-os antes de uma conta Cloudflare real. Para criar contas fictícias somente no banco local, rode `node scripts/seed-dev.mjs`; as credenciais são gravadas em `.wrangler/dev-credentials.json`, ignorado pelo Git. Não execute esse seed em produção.
 
-Para D1 remoto: crie três bancos no painel/CLI Cloudflare, substitua `database_id` em `wrangler.jsonc`, faça `wrangler d1 migrations apply DB --remote --env production` e configure `APP_ORIGIN` com o domínio real. Não há segredo no repositório. A publicação ainda não foi feita. O comando `pnpm cf:build` gera o pacote OpenNext para Workers; no Windows, a ferramenta pode falhar ao criar symlinks por permissão do sistema. Nesse caso, use WSL/Linux ou habilite symlinks no ambiente, sem alterar o código.
+O Worker publicado já possui infraestrutura: confira seus bindings no painel Cloudflare e alinhe `database_id`, nome do banco, Worker e `APP_ORIGIN` locais aos valores existentes. Não crie bancos substitutos nem aplique migrations remotas antes dessa conferência. O comando `pnpm cf:build` gera o pacote OpenNext para Workers; no Windows, a ferramenta pode falhar ao criar symlinks por permissão do sistema. Nesse caso, use WSL/Linux ou habilite symlinks no ambiente, sem alterar o código.
 
 ### Fluxo de operação persistente
 
@@ -163,3 +165,40 @@ Depois do login, o cartão “Dados das etapas anteriores” detecta registros p
 ### Verificação da terceira etapa
 
 Além dos 14 testes puros existentes, `node scripts/test-backend.mjs` passou no D1 local com quatro contas fictícias: sessão, cadastro, proteção de residência, tentativa de edição por outro usuário (403), reserva concorrente (200/409), rota, agendamento, início, coleta de 29,5 kg reais, impacto, auditoria, validação admin e logout. `pnpm typecheck` e o build Next.js passaram. O OpenNext concluiu a compilação Next e falhou somente na etapa final de bundle por `EPERM` de symlink no Windows, limitação documentada acima. Nenhum seed, migration `--remote`, commit, push ou deploy foi executado.
+
+## Arquitetura atual — inteligência logística sem IA generativa
+
+O ReciclaMapa funciona com Next.js no frontend, Cloudflare D1 no backend persistente, Leaflet/OpenStreetMap no mapa, Nominatim para endereço e coordenadas, ViaCEP para o preenchimento inicial do endereço e OSRM para distância e rota viária. Notificações internas usam apenas D1. Concentração, compatibilidade, capacidade, eficiência, recorrência e oportunidades são calculadas por algoritmos determinísticos da aplicação.
+
+O ReciclaMapa não depende de IA para suas decisões. O núcleo do projeto é software e não exige infraestrutura física própria. Esta implementação não acrescenta serviço comercial, assinatura, cadastro de cartão ou armazenamento externo pago ao funcionamento principal. A conta de hospedagem existente e suas cotas não foram auditadas remotamente. A versão atual não possui fotos persistentes nem classificação automática de materiais. Estruturas legadas não utilizadas pela versão atual não são removidas automaticamente de bancos remotos.
+
+### Como o ReciclaMapa toma decisões?
+
+- Concentração soma o peso disponível por cidade, estado e região.
+- Compatibilidade compara o material do ponto aos materiais aceitos pela cooperativa.
+- Capacidade limita a seleção reservável ao volume configurado e a 20 paradas.
+- Eficiência preliminar é kg da seleção dividido pela distância média em linha reta da base aos pontos. É explicitamente uma estimativa.
+- Depois de calcular uma rota, a eficiência viária é kg da rota dividido pelos quilômetros OSRM da rota sugerida.
+- Recorrência agrupa registros do mesmo gerador, material e região.
+- Um registro não gera previsão; dois mostram apenas a faixa histórica; três ou mais usam média móvel ponderada nos últimos cinco registros, com pesos de 1 até N do mais antigo ao mais recente.
+- A rota é sugerida por proximidade e validada pela distância viária. A heurística não garante o ótimo global, e uma alternativa que piora a distância real é descartada.
+
+As oportunidades mostram o volume atual, pontos, materiais, fontes recorrentes, compatibilidade, área de atuação, capacidade, quantidade reservável e kg/km. A ordenação não usa uma nota artificial: pode ser por quantidade, distância, eficiência, pontos, concentração, compatibilidade ou recorrência.
+
+## Evolução desta versão
+
+O cadastro público agora começa por dois caminhos: **Tenho materiais recicláveis**, que cria um `generator`, e **Quero coletar materiais**, que pergunta entre `collector` e `cooperative`. O papel `admin` continua apenas interno.
+
+O endereço aceita CEP com oito dígitos ou formato `00000-000`; o endpoint interno `/api/cep/:cep` consulta ViaCEP com cache e permite preencher manualmente quando o serviço falhar. A geocodificação final ainda exige confirmação do usuário no mapa.
+
+O painel de cooperativa inclui resumo operacional, próximas coletas, fontes recorrentes, oportunidades, capacidade, distância aproximada, materiais predominantes e pesos reais dos últimos sete dias. A barra de conta possui notificações D1, com badge, leitura individual e leitura em lote. Mudanças de reserva, agendamento, início, coleta e cancelamento geram avisos na mesma base transacional do evento.
+
+As migrations incrementais desta versão são `migrations/0002_logistics.sql` e `migrations/0003_notification_events.sql`. Elas adicionam `minimum_collection_kg`, `notifications` e os gatilhos de notificação sem apagar tabelas, usuários, resíduos, rotas ou histórico.
+
+### Configuração e limites
+
+O binding esperado continua sendo `DB`. Os `database_id` de produção e demonstração em `wrangler.jsonc` permanecem placeholders porque o ID do Worker publicado não está disponível com segurança neste ambiente; o arquivo precisa ser alinhado manualmente ao D1 real antes de uma migration remota. Não execute `wrangler d1 migrations apply --remote` sem conferir o banco no painel Cloudflare.
+
+O modo demonstrativo continua separado do banco. A Demo apresenta oportunidade, concentração, rota, reserva, agendamento, início, coleta e impacto em cerca de 30–45 segundos, usando somente estado local fictício. Falhas de Nominatim, ViaCEP ou OSRM são exibidas e não geram coordenadas, endereços ou distâncias inventadas.
+
+Verificação desta versão: `pnpm test` — 23 testes aprovados; `pnpm typecheck` — aprovado; `pnpm build` — aprovado; `node scripts/test-backend.mjs` — persistência, RBAC, privacidade residencial, reserva concorrente, notificações, liberação de reserva, coleta real e auditoria aprovados no D1 local. A interface foi conferida em 360 px, 390 px, 768 px e 1440 px, sem overflow horizontal observado. Nenhuma verificação foi feita contra o Worker de produção.

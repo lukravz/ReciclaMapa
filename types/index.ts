@@ -5,14 +5,14 @@ export interface WastePoint extends Coordinates, AddressFields {
   id: string; name: string; type: string; material: string; kg: number;
   address: string; region: string; availability: string; frequency: string;
   source: Mode; createdAt: string; status: 'available' | 'reserved' | 'scheduled' | 'collected' | 'cancelled';
-  ownerId?:string; reservedBy?:string|null; scheduledDate?:string|null; timeWindow?:string|null; scheduleNote?:string|null; availabilityDate?:string; canEdit?:boolean;
+  inProgress?:boolean; ownerId?:string; reservedBy?:string|null; scheduledDate?:string|null; timeWindow?:string|null; scheduleNote?:string|null; availabilityDate?:string; canEdit?:boolean;
   coordinateKind: 'registered' | 'schematic' | 'demonstrative';
   locationConfirmed?: boolean;
 }
 export type Point = WastePoint;
 export interface Cooperative extends Coordinates {
   id: string; name: string; address: string; radiusKm: number; city?:string; state?:string; description?:string;
-  acceptedMaterials: string[]; capacityKg: number; source: Mode;
+  minimumCollectionKg?: number; acceptedMaterials: string[]; capacityKg: number; source: Mode;
 }
 export interface RoadRoute {
   distanceKm: number; durationMinutes: number; geometry: [number, number][];

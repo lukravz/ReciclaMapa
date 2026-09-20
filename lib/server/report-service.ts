@@ -1,3 +1,4 @@
+import {summarizeHistory} from '../history';
 import {eq,and,sql,desc,inArray} from 'drizzle-orm';
 import type {Database} from '@/db';
 import {collections,collectionItems,wastePoints,routes,cooperatives,validationInterviews,auditLogs,users,type User} from '@/db/schema';
@@ -23,8 +24,10 @@ export async function impact(db:Database,user:User,period:string){
 export async function generationHistory(db:Database,user:User){
  const coop=['collector','cooperative'].includes(user.role)?await ownCooperative(db,user):null;
  const points=await db.select().from(wastePoints).where(user.role==='admin'?undefined:coop?eq(wastePoints.reservedBy,coop.id):eq(wastePoints.generatorUserId,user.id)).orderBy(wastePoints.createdAt);
- const groups=new Map<string,typeof points>();for(const p of points){if(p.frequency==='Única'||p.status==='cancelled')continue;const key=[p.generatorUserId,p.name.toLowerCase(),p.material,p.region.toLowerCase()].join('|');groups.set(key,[...(groups.get(key)??[]),p]);}
- return [...groups.values()].map(records=>{const p=records.at(-1)!,values=records.map(r=>r.kg),average=values.reduce((s,n)=>s+n,0)/values.length;const delta=values.length>=2?values.at(-1)!-values.at(-2)!:null;return {name:p.name,material:p.material,region:p.region,frequency:p.frequency,samples:values.length,average,min:Math.min(...values),max:Math.max(...values),trend:delta,records:records.map(r=>({date:r.createdAt,kg:r.kg,status:r.status})),point:serializeWaste(p,user,coop?.id)};});
+ const groups=new Map<string,typeof points>();for(const p of points){if(p.frequency==='Única'||p.status==='cancelled')continue;const key=[p.generatorUserId,p.name.toLowerCase(),p.material,p.city.trim().toLowerCase(),p.state.trim().toLowerCase(),p.region.toLowerCase()].join('|');groups.set(key,[...(groups.get(key)??[]),p]);}
+ return Promise.all([...groups.values()].map(async records=>{const p=records.at(-1)!,history=records.map(r=>({date:r.createdAt,kg:r.kg,status:r.status})),stats=summarizeHistory(history,p.frequency);
+ const [last]=await db.select({date:collectionItems.collectedAt}).from(collectionItems).where(inArray(collectionItems.wastePointId,records.map(r=>r.id))).orderBy(desc(collectionItems.collectedAt)).limit(1);
+ return {...stats,name:p.type==='Residência'&&p.generatorUserId!==user.id&&user.role!=='admin'?'Gerador residencial':p.name,material:p.material,region:p.region,frequency:p.frequency,records:history,point:serializeWaste(p,user,coop?.id),lastCollection:last?.date??null};}));
 }
 export async function validationReport(db:Database,user:User){requireUser(user,['admin']);const interviews=await db.select().from(validationInterviews).orderBy(desc(validationInterviews.createdAt));return {interviews,total:interviews.length,byType:Object.fromEntries(['collector','cooperative','business','resident'].map(t=>[t,interviews.filter(i=>i.intervieweeType===t).length])),wouldUsePercent:interviews.length?interviews.filter(i=>i.wouldUse==='yes').length/interviews.length*100:null,problems:interviews.map(i=>i.mainProblem)};}
 export async function addInterview(db:Database,user:User,input:unknown){requireUser(user,['admin']);const d=interviewSchema.parse(input),interviewId=id();await db.batch([db.insert(validationInterviews).values({...d,id:interviewId,createdBy:user.id,createdAt:now()}),audit(db,user.id,'interview.created','validation',interviewId)]);return {id:interviewId};}

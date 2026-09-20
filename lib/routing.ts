@@ -4,7 +4,19 @@ export function routeFingerprint(points: Point[], start: Coordinates, end?: Coor
   return JSON.stringify({ points: points.map(p => [p.id, ...Object.values(visibleLocation(p))]), start: {lat:start.lat,lng:start.lng}, end: end ? {lat:end.lat,lng:end.lng} : null });
 }
 export async function fetchRoadRoute(coordinates: Coordinates[], signal?: AbortSignal): Promise<RoadRoute> {
-  const response = await fetch('/api/route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ coordinates }), signal });
+  const request = () => fetch('/api/route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ coordinates }), signal });
+  let response = await request();
+  // A comparison can hit the shared provider interval on its second request.
+  // Retry once after that interval; never bypass the server's rate limit.
+  if (response.status === 429) {
+    await new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) return reject(new DOMException('Cancelado', 'AbortError'));
+      const abort = () => { clearTimeout(timer); reject(new DOMException('Cancelado', 'AbortError')); };
+      const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, 2000);
+      signal?.addEventListener('abort', abort, {once:true});
+    });
+    response = await request();
+  }
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? 'Não foi possível calcular a rota agora. Tente novamente.');
   return result;

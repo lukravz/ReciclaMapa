@@ -8,7 +8,7 @@ export const users=sqliteTable('users',{
 export const profiles=sqliteTable('profiles',{id:text('id').primaryKey(),userId:text('user_id').notNull().unique().references(()=>users.id),phone:text('phone'),city:text('city').notNull(),state:text('state').notNull(),neighborhood:text('neighborhood').notNull(),profileType:text('profile_type').notNull(),createdAt:text('created_at').notNull()});
 export const sessions=sqliteTable('sessions',{tokenHash:text('token_hash').primaryKey(),userId:text('user_id').notNull().references(()=>users.id),expiresAt:integer('expires_at').notNull(),createdAt:text('created_at').notNull()},t=>[index('sessions_user_idx').on(t.userId)]);
 export const cooperatives=sqliteTable('cooperatives',{
- id:text('id').primaryKey(),ownerUserId:text('owner_user_id').notNull().unique().references(()=>users.id),name:text('name').notNull(),description:text('description').notNull().default(''),address:text('address').notNull(),lat:real('latitude').notNull(),lng:real('longitude').notNull(),city:text('city').notNull(),state:text('state').notNull(),radiusKm:real('service_radius_km').notNull(),capacityKg:real('daily_capacity_kg').notNull(),active:integer('active',{mode:'boolean'}).notNull().default(true),...timestamps()
+ id:text('id').primaryKey(),ownerUserId:text('owner_user_id').notNull().unique().references(()=>users.id),name:text('name').notNull(),description:text('description').notNull().default(''),address:text('address').notNull(),lat:real('latitude').notNull(),lng:real('longitude').notNull(),city:text('city').notNull(),state:text('state').notNull(),radiusKm:real('service_radius_km').notNull(),minimumCollectionKg:real('minimum_collection_kg').notNull().default(0),capacityKg:real('daily_capacity_kg').notNull(),active:integer('active',{mode:'boolean'}).notNull().default(true),...timestamps()
 },t=>[check('cooperative_positive',sql`${t.radiusKm}>0 AND ${t.capacityKg}>0`)]);
 export const cooperativeMaterials=sqliteTable('cooperative_materials',{cooperativeId:text('cooperative_id').notNull().references(()=>cooperatives.id),material:text('material_type').notNull()},t=>[uniqueIndex('cooperative_material_unique').on(t.cooperativeId,t.material)]);
 export const wastePoints=sqliteTable('waste_points',{
@@ -32,4 +32,7 @@ export const operationGuards=sqliteTable('operation_guards',{id:text('id').prima
 export const legacyImports=sqliteTable('legacy_imports',{id:text('id').primaryKey(),userId:text('user_id').notNull().references(()=>users.id),checksum:text('checksum').notNull(),payload:text('payload_json').notNull(),createdAt:text('created_at').notNull()},t=>[uniqueIndex('legacy_import_once').on(t.userId,t.checksum)]);
 
 export type User=typeof users.$inferSelect;
+export const notifications=sqliteTable('notifications',{
+ id:text('id').primaryKey(),userId:text('user_id').notNull().references(()=>users.id),type:text('type').notNull(),title:text('title').notNull(),message:text('message').notNull(),entityType:text('entity_type').notNull(),entityId:text('entity_id').notNull(),readAt:text('read_at'),createdAt:text('created_at').notNull()
+},t=>[index('notifications_user_read_idx').on(t.userId,t.readAt,t.createdAt)]);
 export type WasteRow=typeof wastePoints.$inferSelect;

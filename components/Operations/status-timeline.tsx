@@ -1,0 +1,2 @@
+import {operationalStep} from '@/lib/status';
+export default function StatusTimeline({status,inProgress=false}:{status:string;inProgress?:boolean}){const step=operationalStep(status,inProgress);return step<0?<p className="status-badge">Cancelado</p>:<ol className="status-timeline" aria-label="Etapas da coleta">{['Disponível','Reservado','Agendado','Em coleta','Coletado'].map((label,i)=><li key={label} aria-current={i===step?'step':undefined} className={i<=step?'reached':''}><span>{i<step?'✓':i+1}</span>{label}{i===step&&<small>Atual</small>}</li>)}</ol>;}

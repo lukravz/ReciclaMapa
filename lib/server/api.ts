@@ -4,10 +4,13 @@ import {database} from '@/db';
 import {cooperatives,wastePoints} from '@/db/schema';
 import {registerSchema,loginSchema} from './schemas';
 import {bodyJson,checkOrigin,limit,sessionUser,requireUser,publicUser,register,login,logout,createSession,sessionCookie,HttpError} from './security';
-import {listWaste,getWaste,serializeWaste,createWaste,editWaste,reserveWaste,scheduleWaste,cancelWaste,saveCooperative,getCooperative,getProfile} from './waste-service';
+import {listWaste,getWaste,serializeWaste,createWaste,editWaste,reserveWaste,scheduleWaste,cancelWaste,saveCooperative,getCooperative,getProfile,releaseWaste,runningPointIds} from './waste-service';
 import {createRoute,listRoutes,scheduleRoute,changeRouteStatus,collect} from './route-service';
 import {impact,generationHistory,addInterview,validationReport,adminReport} from './report-service';
 import {importLegacy,importedArchives} from './import-service';
+import {listNotifications,readNotification} from './notification-service';
+import {cepAddress} from './cep-service';
+import {intelligence} from './intelligence-service';
 import {ProviderError} from './providers';
 export async function dispatch(request:Request,path:string[]){
  const headers=new Headers({'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff'});
@@ -22,12 +25,18 @@ export async function dispatch(request:Request,path:string[]){
  if(key==='auth/session'&&method==='GET')return Response.json({user:user?publicUser(user):null,profile:user?await getProfile(db,user):null},{headers});
  await limit(db,`api:${user?.id??ip}`,method==='GET'?240:60,60);
  let result:unknown;
- if(path[0]==='waste'){
+ if(path[0]==='cep'&&path.length===2&&method==='GET')result=await cepAddress(path[1]);
+ else if(key==='intelligence'&&method==='GET')result=await intelligence(db,requireUser(user));
+ else if(key==='notifications'&&method==='GET')result=await listNotifications(db,requireUser(user));
+ else if(key==='notifications/read-all'&&method==='POST')result=await readNotification(db,requireUser(user));
+ else if(path[0]==='notifications'&&path.length===3&&path[2]==='read'&&method==='POST')result=await readNotification(db,requireUser(user),path[1]);
+ else if(path[0]==='waste'){
   if(path.length===1&&method==='GET')result=await listWaste(db,user,url.searchParams);
   else if(path.length===1&&method==='POST')result=await createWaste(db,requireUser(user),await bodyJson(request));
-  else if(path.length===2&&method==='GET'){const p=await getWaste(db,path[1]),c=user?await getCooperative(db,user):null;if(p.status!=='available'&&p.generatorUserId!==user?.id&&p.reservedBy!==c?.id&&user?.role!=='admin')throw new HttpError(404,'Resíduo não encontrado.');result=serializeWaste(p,user,c?.id);}
+  else if(path.length===2&&method==='GET'){const p=await getWaste(db,path[1]),c=user?await getCooperative(db,user):null;if(p.status!=='available'&&p.generatorUserId!==user?.id&&p.reservedBy!==c?.id&&user?.role!=='admin')throw new HttpError(404,'Resíduo não encontrado.');result={...serializeWaste(p,user,c?.id),inProgress:(await runningPointIds(db)).has(p.id)};}
   else if(path.length===2&&method==='PATCH')result=await editWaste(db,requireUser(user),path[1],await bodyJson(request));
   else if(path.length===2&&method==='DELETE')result=await cancelWaste(db,requireUser(user),path[1]);
+  else if(path.length===3&&method==='POST'&&path[2]==='release')result=await releaseWaste(db,requireUser(user),path[1]);
   else if(path.length===3&&method==='POST'&&path[2]==='reserve')result=await reserveWaste(db,requireUser(user),path[1]);
   else if(path.length===3&&method==='POST'&&path[2]==='schedule')result=await scheduleWaste(db,requireUser(user),path[1],await bodyJson(request));
   else if(path.length===3&&method==='POST'&&path[2]==='collect')result=await collect(db,requireUser(user),await bodyJson(request),undefined,path[1]);

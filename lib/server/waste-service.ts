@@ -23,7 +23,8 @@ export async function listWaste(db:Database,user:User|null,params:URLSearchParam
  // Radius is evaluated server-side on privacy-safe coordinates before pagination.
  const all=await db.select().from(wastePoints).where(and(...where)).orderBy(desc(wastePoints.createdAt));
  const filtered=q.radius?all.filter(p=>p.locationConfirmed&&calculateDistance(coop!,getPublicCoordinates(p))<=q.radius!):all;
- return {points:filtered.slice((q.page-1)*q.limit,q.page*q.limit).map(p=>serializeWaste(p,user,coop?.id)),total:filtered.length,page:q.page,limit:q.limit};
+ const running=await runningPointIds(db);
+ return {points:filtered.slice((q.page-1)*q.limit,q.page*q.limit).map(p=>({...serializeWaste(p,user,coop?.id),inProgress:running.has(p.id)})),total:filtered.length,page:q.page,limit:q.limit};
 }
 export async function createWaste(db:Database,user:User,input:unknown){
  requireUser(user,['generator','admin']);const d=wasteSchema.parse(input),pointId=id(),at=now();
@@ -43,6 +44,11 @@ export async function scheduleWaste(db:Database,user:User,pointId:string,input:u
  const coop=await ownCooperative(db,user),d=scheduleSchema.parse(input);if(d.date<now().slice(0,10))throw new HttpError(400,'Escolha uma data a partir de hoje.');
  await atomic(db,sql`EXISTS(SELECT 1 FROM waste_points WHERE id=${pointId} AND reserved_by=${coop.id} AND status IN ('reserved','scheduled')) AND NOT EXISTS(SELECT 1 FROM route_points rp JOIN routes r ON r.id=rp.route_id WHERE rp.waste_point_id=${pointId} AND r.status IN ('draft','scheduled','in_progress'))`,[db.update(wastePoints).set({status:'scheduled',scheduledDate:d.date,timeWindow:d.timeWindow,scheduleNote:d.note,updatedAt:now()}).where(eq(wastePoints.id,pointId)),audit(db,user.id,'collection.scheduled','waste',pointId)]);return serializeWaste(await getWaste(db,pointId),user,coop.id);
 }
+export async function releaseWaste(db:Database,user:User,pointId:string){
+ const coop=await ownCooperative(db,user);
+ await atomic(db,sql`EXISTS(SELECT 1 FROM waste_points WHERE id=${pointId} AND reserved_by=${coop.id} AND status IN ('reserved','scheduled')) AND NOT EXISTS(SELECT 1 FROM route_points rp JOIN routes r ON r.id=rp.route_id WHERE rp.waste_point_id=${pointId} AND r.status IN ('draft','scheduled','in_progress'))`,[db.update(wastePoints).set({status:'available',reservedBy:null,scheduledDate:null,timeWindow:null,scheduleNote:null,updatedAt:now()}).where(eq(wastePoints.id,pointId)),audit(db,user.id,'reservation.cancelled','waste',pointId)]);return {ok:true};
+}
+export async function runningPointIds(db:Database){return new Set((await db.select({id:routePoints.wastePointId}).from(routePoints).innerJoin(routes,eq(routes.id,routePoints.routeId)).where(eq(routes.status,'in_progress'))).map(r=>r.id));}
 export async function cancelWaste(db:Database,user:User,pointId:string){
  const p=await getWaste(db,pointId);if(p.generatorUserId!==user.id&&user.role!=='admin')throw new HttpError(403,'Você não pode cancelar este resíduo.');
  const associated=await db.select({id:routes.id}).from(routePoints).innerJoin(routes,eq(routes.id,routePoints.routeId)).where(and(eq(routePoints.wastePointId,pointId),inArray(routes.status,['draft','scheduled','in_progress'])));

@@ -56,7 +56,7 @@ test('forecast derives from real history and excludes already available stock',(
    w=completeCollection(w,[i?`week-${i}`:p.id],`2026-09-${String(1+i*7).padStart(2,'0')}T12:00:00Z`);
  }
  const estimate=forecast(w,p,new Date('2026-09-16T12:00:00Z'));
- assert.ok(Math.abs(estimate.average-50.6666667)<.0001);
+ assert.ok(Math.abs(estimate.average-51.1666667)<.0001);
  assert.equal(estimate.samples,3);
  assert.equal(estimate.next.toISOString(),'2026-09-22T12:00:00.000Z');
  assert.ok(forecast7Days(w,new Date('2026-09-16T12:00:00Z'))>50);

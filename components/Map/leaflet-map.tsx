@@ -41,7 +41,7 @@ function Clusters({points,onToggle}:{points:Point[];onToggle?:(id:string)=>void}
     map.addLayer(group);return()=>{map.removeLayer(group);group.clearLayers();};
   },[map,points,onToggle]);return null;
 }
-export default function LeafletMap({points,selected=[],onToggle,route=false,geometry,originalGeometry,start,end,concentration=false,radiusKm,focus,picked,onPick,privatePicker=false}:TerritoryMapProps) {
+export default function LeafletMap({points,selected=[],onToggle,route=false,geometry,originalGeometry,start,end,concentration=false,radiusKm,focus,picked,onPick,privatePicker=false,highlighted=[]}:TerritoryMapProps) {
   const [location,setLocation]=useState<Coordinates|null>(null),[locating,setLocating]=useState(false),[error,setError]=useState(''),[tileError,setTileError]=useState(false);
   const visible=useMemo(()=>points.filter(hasDefinedLocation),[points]);
   const markerPoints=visible.filter(p=>selected.includes(p.id)),others=visible.filter(p=>!selected.includes(p.id));
@@ -51,10 +51,10 @@ export default function LeafletMap({points,selected=[],onToggle,route=false,geom
     const extent=line.reduce((b,[lng,lat])=>({south:Math.min(b.south,lat),north:Math.max(b.north,lat),west:Math.min(b.west,lng),east:Math.max(b.east,lng)}),{south:90,north:-90,west:180,east:-180});
     return [{lat:extent.south,lng:extent.west},{lat:extent.north,lng:extent.east}];
   },[geometry,originalGeometry]);
-  const bounds:Coordinates[]=[...visible.map(visibleLocation),...routeBounds,...(start?[start]:[]),...(end?[end]:[]),...(picked?[picked]:[])];
+  const bounds:Coordinates[]=[...(highlighted.length?visible.filter(p=>highlighted.includes(p.id)):visible).map(visibleLocation),...routeBounds,...(start&&!highlighted.length?[start]:[]),...(end&&!highlighted.length?[end]:[]),...(picked?[picked]:[])];
   const safeFocus=focus??location??picked;
   async function locate(){setLocating(true);setError('');try{const p=await locateUser();setLocation(p);onPick?.(p);}catch(e){setError((e as Error).message);}finally{setLocating(false);}}
-  function marker(p:Point){const pos=visibleLocation(p);const index=selected.indexOf(p.id);return <Marker key={p.id} position={[pos.lat,pos.lng]} icon={pin(materialColor(p.material),index>=0?String(index+1):p.frequency==='Única'?'•':'↻',p.frequency!=='Única')} title={`${p.name}, ${num(p.kg)} kg, ${p.region}`}>
+  function marker(p:Point){const pos=visibleLocation(p);const index=selected.indexOf(p.id);return <Marker opacity={highlighted.length&&!highlighted.includes(p.id)?.3:1} key={p.id} position={[pos.lat,pos.lng]} icon={pin(materialColor(p.material),index>=0?String(index+1):p.frequency==='Única'?'•':'↻',p.frequency!=='Única')} title={`${p.name}, ${num(p.kg)} kg, ${p.region}`}>
     <Popup minWidth={210} maxWidth={280}><div className="geo-popup"><DataBadge mode={p.source}/><h3>{p.name}</h3><p><b>{p.material} · {num(p.kg)} kg</b></p><dl><div><dt>Região</dt><dd>{p.region}</dd></div><div><dt>Disponibilidade</dt><dd>{p.availability}</dd></div><div><dt>Recorrência</dt><dd>{p.frequency}</dd></div><div><dt>Status</dt><dd>{statusLabel[p.status]}</dd></div></dl>{p.frequency!=='Única'&&<span className="recurring-label">↻ Fonte recorrente</span>}<p>{p.type==='Residência'?'Localização residencial aproximada. Endereço completo protegido.':p.address}</p>{p.source==='registered'&&p.type!=='Residência'&&<DataBadge mode="location"/>}{onToggle&&p.status==='available'&&<button className="btn primary full" onClick={()=>onToggle(p.id)}>{index>=0?'Remover da rota':'Adicionar à rota'}</button>}</div></Popup>
   </Marker>;}
   return <div className={`real-map ${route?'road-map':''}`}>
@@ -67,7 +67,7 @@ export default function LeafletMap({points,selected=[],onToggle,route=false,geom
       {originalGeometry&&<Polyline positions={originalGeometry.map(([lng,lat])=>[lat,lng])} pathOptions={{color:'#88978c',weight:4,opacity:.65,dashArray:'6 7'}}/>}
       {geometry&&<Polyline positions={geometry.map(([lng,lat])=>[lat,lng])} pathOptions={{color:'#2f8f5b',weight:5,opacity:.95}}/>}
       {concentration&&visible.map(p=>{const pos=visibleLocation(p);return <CircleMarker key={`heat-${p.id}`} center={[pos.lat,pos.lng]} radius={Math.sqrt(p.kg)*3} pathOptions={{color:materialColor(p.material),weight:1,fillOpacity:.22}}><Popup>{p.region} · {num(p.kg)} kg · {p.source==='simulated'?'Dado demonstrativo':'Dado cadastrado'}</Popup></CircleMarker>;})}
-      {others.length>20?<Clusters points={others} onToggle={onToggle}/>:others.map(marker)}{markerPoints.map(marker)}
+      {others.length>20&&!highlighted.length?<Clusters points={others} onToggle={onToggle}/>:others.map(marker)}{markerPoints.map(marker)}
       {picked&&<Marker position={[picked.lat,picked.lng]} icon={pin('#2d7dbd','✓')} title="Localização selecionada"><Popup>{privatePicker?'Posição exata visível apenas neste formulário privado.':'Confirme esta localização no formulário.'}</Popup></Marker>}
       {location&&!onPick&&<CircleMarker center={[location.lat,location.lng]} radius={7} pathOptions={{color:'#fff',weight:3,fillColor:'#2d7dbd',fillOpacity:1}}><Popup>Sua localização nesta sessão</Popup></CircleMarker>}
     </MapContainer>

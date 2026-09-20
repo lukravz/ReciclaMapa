@@ -3,7 +3,7 @@ import dynamic from 'next/dynamic';
 import { LoaderCircle } from 'lucide-react';
 import type { Coordinates, Point } from '@/types';
 export interface TerritoryMapProps {
-  points: Point[]; selected?: string[]; onToggle?: (id: string) => void;
+  highlighted?:string[]; points: Point[]; selected?: string[]; onToggle?: (id: string) => void;
   route?: boolean; geometry?: [number,number][]; originalGeometry?: [number,number][];
   start?: Coordinates; end?: Coordinates; concentration?: boolean;
   radiusKm?: number; focus?: Coordinates | null;
