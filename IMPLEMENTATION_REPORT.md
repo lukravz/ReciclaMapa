@@ -1,5 +1,7 @@
 # Relatório de implementação — ReciclaMapa
 
+> Atualização posterior autorizada: o usuário solicitou enviar as alterações ao GitHub. Foram incorporados os commits remotos que atualizam README, pnpm-workspace e Wrangler. A configuração atual preserva o Worker e o ID de D1 existentes no repositório, com produção na raiz e sem `env.production`; as observações sobre placeholders abaixo são históricas. Os comandos de referência ao final foram ajustados para essa configuração. Não houve inspeção do banco remoto, migration remota ou deploy executado pelo agente. A seção informativa Modelo de Negócio também foi adicionada (`components/business-model.tsx`, navegação em `components/recicla-app.tsx` e estilos em `app/globals.css`), com typecheck e build aprovados.
+
 Revisão local em 20/09/2026. Repositório existente: `lukravz/ReciclaMapa`. Nenhum commit, push, alteração de remote, deploy ou migration remota foi realizado nesta atualização. O projeto ATLAS da pasta superior foi preservado.
 
 ## Base preservada
@@ -145,10 +147,10 @@ A integração requer as contas locais de QA. Somente em um ambiente local de te
 Para uma futura atualização de produção, primeiro confira no painel o Worker, o binding `DB`, o banco existente, o domínio e o histórico de migrations. Alinhe os valores locais e mantenha um backup recuperável. Após autorização específica, os comandos de referência são:
 
 ```powershell
-pnpm exec wrangler d1 migrations list DB --remote --env production
-pnpm exec wrangler d1 migrations apply DB --remote --env production
+pnpm exec wrangler d1 migrations list DB --remote
+pnpm exec wrangler d1 migrations apply DB --remote
 pnpm cf:build
-pnpm exec wrangler deploy --env production
+pnpm exec wrangler deploy
 ```
 
 Esses comandos remotos não foram executados. Se o histórico remoto tiver migrations experimentais com numeração conflitante, reconcilie o histórico antes de aplicar; não renumere ou apague estruturas aplicadas por suposição. No Windows, o build OpenNext pode exigir um ambiente com suporte a symlinks ou WSL/Linux.

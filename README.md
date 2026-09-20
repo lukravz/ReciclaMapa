@@ -1,5 +1,7 @@
 # RECICLAMAPA — inteligência logística
 
+> Sincronização com o GitHub: as configurações remotas existentes foram incorporadas antes do envio desta atualização. `wrangler.jsonc` agora usa o Worker `reciclamapa`, binding `DB`, ID de D1 já registrado no repositório e configuração de produção na raiz, sem ambientes nomeados. Os trechos históricos abaixo sobre placeholders e ambientes separados descrevem o estado anterior. Não use `--env production` com a configuração atual. O banco remoto não foi inspecionado nem migrado. As migrations `0002` e `0003` precisam ser conferidas e aplicadas antes de publicar o código atualizado; atualizar o GitHub não comprova atualização do banco.
+
 **Resíduos em dados. Dados em rotas.**
 
 A implementação atual e seus limites estão descritos em [IMPLEMENTATION_REPORT.md](IMPLEMENTATION_REPORT.md). As seções de etapas anteriores abaixo registram a evolução local. O projeto já possui um Worker publicado, informado pelo responsável; esta atualização ainda não foi publicada nem validada em produção.
