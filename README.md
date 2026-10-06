@@ -1,5 +1,8 @@
 # RECICLAMAPA — inteligência logística
 
+> Publicação de 06/10/2026: melhorias de coletas, contas, planos e preferências enviadas ao GitHub e publicadas no Worker `reciclamapa`. Migrações remotas `0004` a `0007` aplicadas. Versão Cloudflare: `950330c0-7208-4f6a-a810-134bb7c563e1`. Site e endpoints públicos verificados. As observações de não publicação abaixo registram etapas anteriores.
+
+
 > Sincronização com o GitHub: as configurações remotas existentes foram incorporadas antes do envio desta atualização. `wrangler.jsonc` agora usa o Worker `reciclamapa`, binding `DB`, ID de D1 já registrado no repositório e configuração de produção na raiz, sem ambientes nomeados. Os trechos históricos abaixo sobre placeholders e ambientes separados descrevem o estado anterior. Não use `--env production` com a configuração atual. O banco remoto não foi inspecionado nem migrado. As migrations `0002` e `0003` precisam ser conferidas e aplicadas antes de publicar o código atualizado; atualizar o GitHub não comprova atualização do banco.
 
 **Resíduos em dados. Dados em rotas.**

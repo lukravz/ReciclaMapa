@@ -1,5 +1,8 @@
 # Coletas reais: horários, validade e resultados
 
+> Publicação de 06/10/2026: melhorias de coletas, contas, planos e preferências enviadas ao GitHub e publicadas no Worker `reciclamapa`. Migrações remotas `0004` a `0007` aplicadas. Versão Cloudflare: `950330c0-7208-4f6a-a810-134bb7c563e1`. Site e endpoints públicos verificados. As observações de não publicação abaixo registram etapas anteriores.
+
+
 As alterações estão no ReciclaMapa existente. Os dados operacionais usam D1, sessão e permissões; os atalhos Gerador demo, Coletor demo e Cooperativa demo usam exclusivamente o ambiente demonstrativo. Nenhuma credencial pública foi criada no banco real.
 
 ## Banco e publicação

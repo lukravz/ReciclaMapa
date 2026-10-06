@@ -1,5 +1,8 @@
 # Planos, perfil e configurações
 
+> Publicação de 06/10/2026: melhorias de coletas, contas, planos e preferências enviadas ao GitHub e publicadas no Worker `reciclamapa`. Migrações remotas `0004` a `0007` aplicadas. Versão Cloudflare: `950330c0-7208-4f6a-a810-134bb7c563e1`. Site e endpoints públicos verificados. As observações de não publicação abaixo registram etapas anteriores.
+
+
 Implementação no ReciclaMapa existente, sem cobrança, contratação, serviços pagos ou alteração de planos pelo navegador.
 
 ## O que funciona

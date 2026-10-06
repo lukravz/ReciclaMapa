@@ -11,11 +11,12 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply DB --local",
-    "cf:build": "opennextjs-cloudflare build",
+    "cf:build": "node --import ./scripts/windows-build.mjs node_modules/@opennextjs/cloudflare/dist/cli/index.js build",
     "cf:preview": "opennextjs-cloudflare preview",
     "test:integration": "node scripts/test-backend.mjs",
     "test:reliability": "node scripts/test-reliability.mjs",
-    "test:plans": "node scripts/test-plans.mjs"
+    "test:plans": "node scripts/test-plans.mjs",
+    "cf:deploy": "wrangler deploy --config wrangler.jsonc"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.6",
@@ -41,6 +42,6 @@
     "drizzle-kit": "0.31.10",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
-    "wrangler": "4.92.0"
+    "wrangler": "4.147.0"
   }
 }
