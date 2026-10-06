@@ -1,4 +1,5 @@
 'use client';
+import AvailabilityInfo from '../Operations/availability-info';
 import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -12,7 +13,7 @@ import type { Coordinates, Point } from '@/types';
 import { DataBadge } from '../primitives';
 import {statusLabel} from '@/lib/api-client';
 export function materialColor(material: string) {
-  if (material.includes('Papel')) return '#c28e17';
+  if (material.includes('Papel')) return '#94700e';
   if (material.includes('Plástico')) return '#2d7dbd';
   if (material === 'Vidro') return '#8455a6';
   if (material === 'Eletrônico') return '#d47b28';
@@ -55,7 +56,7 @@ export default function LeafletMap({points,selected=[],onToggle,route=false,geom
   const safeFocus=focus??location??picked;
   async function locate(){setLocating(true);setError('');try{const p=await locateUser();setLocation(p);onPick?.(p);}catch(e){setError((e as Error).message);}finally{setLocating(false);}}
   function marker(p:Point){const pos=visibleLocation(p);const index=selected.indexOf(p.id);return <Marker opacity={highlighted.length&&!highlighted.includes(p.id)?.3:1} key={p.id} position={[pos.lat,pos.lng]} icon={pin(materialColor(p.material),index>=0?String(index+1):p.frequency==='Única'?'•':'↻',p.frequency!=='Única')} title={`${p.name}, ${num(p.kg)} kg, ${p.region}`}>
-    <Popup minWidth={210} maxWidth={280}><div className="geo-popup"><DataBadge mode={p.source}/><h3>{p.name}</h3><p><b>{p.material} · {num(p.kg)} kg</b></p><dl><div><dt>Região</dt><dd>{p.region}</dd></div><div><dt>Disponibilidade</dt><dd>{p.availability}</dd></div><div><dt>Recorrência</dt><dd>{p.frequency}</dd></div><div><dt>Status</dt><dd>{statusLabel[p.status]}</dd></div></dl>{p.frequency!=='Única'&&<span className="recurring-label">↻ Fonte recorrente</span>}<p>{p.type==='Residência'?'Localização residencial aproximada. Endereço completo protegido.':p.address}</p>{p.source==='registered'&&p.type!=='Residência'&&<DataBadge mode="location"/>}{onToggle&&p.status==='available'&&<button className="btn primary full" onClick={()=>onToggle(p.id)}>{index>=0?'Remover da rota':'Adicionar à rota'}</button>}</div></Popup>
+    <Popup minWidth={210} maxWidth={280}><div className="geo-popup"><DataBadge mode={p.source}/><h3>{p.name}</h3><p><b>{p.material} · {num(p.kg)} kg</b></p><dl><div><dt>Região</dt><dd>{p.region}</dd></div><div><dt>Disponibilidade</dt><dd>{p.availability}</dd></div><div><dt>Recorrência</dt><dd>{p.frequency}</dd></div><div><dt>Status</dt><dd>{p.status==='available'&&p.needsConfirmation?'Disponibilidade a confirmar':p.status==='cancelled'?'Retirado pelo gerador':statusLabel[p.status]}</dd></div></dl><AvailabilityInfo point={p}/>{p.frequency!=='Única'&&<span className="recurring-label">↻ Fonte recorrente</span>}<p>{p.type==='Residência'?'Localização residencial aproximada. Endereço completo protegido.':p.address}</p>{p.source==='registered'&&p.type!=='Residência'&&<DataBadge mode="location"/>}{onToggle&&p.status==='available'&&!p.needsConfirmation&&<button className="btn primary full" onClick={()=>onToggle(p.id)}>{index>=0?'Remover da rota':'Adicionar à rota'}</button>}</div></Popup>
   </Marker>;}
   return <div className={`real-map ${route?'road-map':''}`}>
     <MapContainer center={[-3.7327,-38.5267]} zoom={13} scrollWheelZoom={false} className="leaflet-surface" aria-label="Mapa geográfico de resíduos" zoomControl={true}>

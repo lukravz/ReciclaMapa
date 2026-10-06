@@ -1,10 +1,7 @@
 import {Users,Briefcase,Building2,Check,Info,ChartNoAxesCombined,FileText} from 'lucide-react';
 
-const plans=[
- {id:'free',title:'Acesso gratuito',icon:Users,badge:'Gratuito',audience:'Moradores, pequenos geradores e catadores independentes.',label:'Acesso básico',features:['Cadastro de resíduos','Mapa','Visualização de materiais','Reserva/coleta básica','Acompanhamento de status'],note:'O objetivo é não criar barreiras de acesso para quem gera ou coleta materiais recicláveis.'},
- {id:'professional',title:'Plano profissional',icon:Briefcase,badge:'Proposta futura',audience:'Cooperativas, associações e organizações de coleta.',label:'Possíveis recursos futuros',features:['Gestão de múltiplas rotas','Histórico ampliado','Relatórios operacionais','Gestão de vários usuários','Indicadores de produtividade','Planejamento recorrente','Exportação de dados'],note:'Modelo proposto para futuras versões comerciais.'},
- {id:'institutional',title:'Plano institucional',icon:Building2,badge:'Proposta futura',audience:'Empresas, prefeituras, organizações, projetos públicos e grandes geradores.',label:'Possíveis recursos futuros',features:['Indicadores territoriais','Acompanhamento de regiões','Relatórios gerenciais','Histórico consolidado','Gestão de múltiplas unidades','Análise de geração de resíduos','Exportação de relatórios','Visão institucional'],note:'Possibilidade de gestão em maior escala, a ser validada com as instituições.'},
-];
+import {PLANS,FEATURES,type PlanId} from '@/lib/plans';
+const plans=(Object.keys(PLANS) as PlanId[]).map(id=>({id,title:PLANS[id].name,icon:id==='free'?Users:id==='pro'?Briefcase:Building2,badge:id==='free'?'Gratuito':'Proposta comercial',audience:PLANS[id].audience,label:PLANS[id].price,features:Object.values(FEATURES).filter(f=>f.plan===id).map(f=>f.label+(f.ready?'':' · Em desenvolvimento')),note:id==='free'?'O acesso básico permanece gratuito.':'Contratação em breve. Inclui os recursos dos planos anteriores.'}));
 
 export default function BusinessModel(){
  return <div className="business-model">

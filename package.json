@@ -13,7 +13,9 @@
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare preview",
-    "test:integration": "node scripts/test-backend.mjs"
+    "test:integration": "node scripts/test-backend.mjs",
+    "test:reliability": "node scripts/test-reliability.mjs",
+    "test:plans": "node scripts/test-plans.mjs"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.6",

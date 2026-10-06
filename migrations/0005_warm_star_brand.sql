@@ -1,0 +1,1 @@
+ALTER TABLE `stop_results` ADD `point_snapshot_json` text;

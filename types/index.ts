@@ -5,6 +5,7 @@ export interface WastePoint extends Coordinates, AddressFields {
   id: string; name: string; type: string; material: string; kg: number;
   address: string; region: string; availability: string; frequency: string;
   source: Mode; createdAt: string; status: 'available' | 'reserved' | 'scheduled' | 'collected' | 'cancelled';
+  pickupWindows?:import('@/lib/collection-reliability').PickupWindow[]; accessNote?:string; confirmedAt?:string|null; expiresAt?:string|null; validityDays?:number; revision?:number; needsConfirmation?:boolean; planningReview?:boolean; results?:StopResult[];
   inProgress?:boolean; ownerId?:string; reservedBy?:string|null; scheduledDate?:string|null; timeWindow?:string|null; scheduleNote?:string|null; availabilityDate?:string; canEdit?:boolean;
   coordinateKind: 'registered' | 'schematic' | 'demonstrative';
   locationConfirmed?: boolean;
@@ -27,8 +28,9 @@ export interface RoutePlan {
   ids: string[]; originalIds: string[]; date: string; optimized: boolean;
   comparison?: RouteComparison;
 }
+export interface StopResult {pointSnapshot?:string|null;id:string;wastePointId:string;outcome:import('@/lib/collection-reliability').Outcome;estimatedWeight:number;actualWeight:number;remainingKg:number;note:string;date:string;routeId?:string|null}
 export interface Collection {
-  id: string; date: string; points: Point[]; kg: number;
+  id: string; date: string; points: Point[]; kg: number; completed?:boolean; results?:StopResult[]; routeId?:string|null;
   route?: RouteComparison;
   // Planned road distance is not a GPS measurement of actual travel.
   actualDistanceKm?: number;

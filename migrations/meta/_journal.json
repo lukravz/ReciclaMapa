@@ -29,6 +29,34 @@
       "when": 1789861210507,
       "tag": "0003_notification_events",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791046356794,
+      "tag": "0004_slim_ultragirl",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791047843582,
+      "tag": "0005_warm_star_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791052485430,
+      "tag": "0006_yummy_nightshade",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791053701591,
+      "tag": "0007_availability_confirmation_notification",
+      "breakpoints": true
     }
   ]
 }

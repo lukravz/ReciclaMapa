@@ -1,0 +1,102 @@
+// Only localhost HTTP and an embedded/local D1 proxy are used. Never runs against the published site.
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {getPlatformProxy} from 'wrangler';
+const base=process.env.TEST_BASE_URL??'http://localhost:3001';
+if(!['localhost','127.0.0.1'].includes(new URL(base).hostname))throw new Error('Execute somente no servidor local.');
+const credentials=JSON.parse(await readFile('.wrangler/dev-credentials.json','utf8')),actors={};
+async function request(actor,path,method='GET',data,expected=200){
+ const response=await fetch(base+'/api/'+path,{method,headers:{'Content-Type':'application/json',Origin:base,...(actor?{Cookie:actor.cookie}:{})},body:data===undefined?undefined:JSON.stringify(data)});
+ const body=await response.json();assert.equal(response.status,expected,method+' '+path+': '+JSON.stringify(body));return {body,response};
+}
+for(const role of ['generator','cooperative','collector']){const account=credentials.accounts.find(a=>a.role===role),r=await request(null,'auth/login','POST',{email:account.email,password:credentials.password});actors[role]={...account,cookie:r.response.headers.get('set-cookie').split(';')[0]};}
+const g=actors.generator,c=actors.cooperative,other=actors.collector,date=new Date().toISOString().slice(0,10),day=new Date(date+'T12:00:00Z').getUTCDay();
+const config={name:'QA reliability',address:'Fictitious base',city:'Fortaleza',state:'CE',lat:-3.7463,lng:-38.5385,radiusKm:20,capacityKg:1000000,acceptedMaterials:['Papelão','Vidro']};
+await request(c,'cooperatives','POST',config);await request(other,'cooperatives','POST',{...config,name:'QA other'});
+const template={name:'QA reliability '+Date.now(),type:'Residência',material:'Papelão',kg:30,address:'Private QA address, 123',street:'Private QA address',number:'123',postcode:'60000-000',region:'Centro',city:'Fortaleza',state:'CE',lat:-3.734561,lng:-38.523876,availability:'Hoje',frequency:'Semanal',locationConfirmed:true,pickupWindows:[{day,start:'08:00',end:'12:00'}],accessNote:'Private gate code QA',validityDays:7};
+const create=async extra=>(await request(g,'waste','POST',{...template,...extra})).body;
+const get=async p=>(await request(g,'waste/'+p.id)).body;
+const p=await create({}),q=await create({name:template.name+' second'}),expired=await create({name:template.name+' expired'});
+const pub=(await request(null,'waste/'+p.id)).body;
+assert.equal(pub.accessNote,'');assert.equal(pub.address.includes('123'),false);assert.notEqual(pub.lat,template.lat);assert.equal(pub.pickupWindows.length,1);
+await request(other,'waste/'+p.id+'/confirm','POST',{revision:0},403);
+await request(g,'waste/'+p.id,'PATCH',{...template,kg:31,revision:0});
+await request(g,'waste/'+p.id,'PATCH',{...template,kg:32,revision:0},409);
+const proxy=await getPlatformProxy({remoteBindings:false});
+try{await proxy.env.DB.prepare("UPDATE waste_points SET confirmed_at='2020-01-01T00:00:00.000Z',expires_at='2020-01-08T00:00:00.000Z',revision=revision+1 WHERE id=?").bind(expired.id).run();}finally{await proxy.dispose();}
+assert.equal((await get(expired)).needsConfirmation,true);
+await request(c,'waste/'+expired.id+'/reserve','POST',{},409);
+assert.equal((await request(c,'intelligence')).body.groups.some(group=>group.ids.includes(expired.id)),false);
+await request(g,'waste/'+expired.id+'/confirm','POST',{revision:(await get(expired)).revision});
+assert.equal((await get(expired)).needsConfirmation,false);
+const race=await Promise.all([c,other].map(actor=>requestRaw(actor,'waste/'+expired.id+'/reserve')));
+assert.deepEqual(race.sort(),[200,409]);
+async function requestRaw(actor,path){return (await fetch(base+'/api/'+path,{method:'POST',headers:{'Content-Type':'application/json',Origin:base,Cookie:actor.cookie},body:'{}'})).status;}
+await request(c,'waste/'+p.id+'/reserve','POST',{});await request(c,'waste/'+q.id+'/reserve','POST',{});
+const r=(await request(c,'routes','POST',{ids:[p.id,q.id],start:{lat:config.lat,lng:config.lng},calculate:false})).body;
+await request(other,'routes/'+r.id+'/schedule','POST',{date,timeWindow:'08:00-10:00'},403);
+await request(c,'routes/'+r.id+'/schedule','POST',{date,timeWindow:'11:00-13:00'},409);
+await request(c,'routes/'+r.id+'/schedule','POST',{date,timeWindow:'08:00-10:00'});
+let latest=await get(p);await request(g,'waste/'+p.id,'PATCH',{...template,kg:26,revision:latest.revision});
+let saved=(await request(c,'routes')).body.find(route=>route.id===r.id);assert.equal(saved.reviewRequired,true);
+assert.ok((await request(c,'notifications')).body.items.some(n=>n.entityId===p.id&&n.type==='material.changed'));
+await request(c,'routes/'+r.id+'/start','POST',{},409);
+await request(c,'routes/'+r.id+'/schedule','POST',{date,timeWindow:'08:00-10:00'},409);
+await request(c,'routes/'+r.id+'/schedule','POST',{date,timeWindow:'08:00-10:00',review:true});
+await request(c,'routes/'+r.id+'/start','POST',{});
+latest=await get(p);
+const partial={date,outcome:'partial',actualWeight:12,remainingAvailable:true,remainingKg:9,note:'Real QA weight; remaining is estimated.',revision:latest.revision};
+await request(other,'routes/'+r.id+'/stops/'+p.id+'/result','POST',partial,403);
+await request(g,'routes/'+r.id+'/stops/'+p.id+'/result','POST',partial,403);
+await request(c,'routes/'+r.id+'/stops/'+p.id+'/result','POST',partial);
+await request(c,'routes/'+r.id+'/stops/'+p.id+'/result','POST',partial,409);
+await request(c,'waste/'+p.id+'/reserve','POST',{},409);
+await request(c,'routes/'+r.id+'/finish','POST',{},409);
+const runningImpact=(await request(c,'impact')).body;assert.equal(runningImpact.collections.find(col=>col.routeId===r.id).kg,12);assert.equal(runningImpact.collections.find(col=>col.routeId===r.id).completed,false);
+assert.equal((await request(g,'waste?mine=true')).body.points.find(point=>point.id===p.id).results[0].actualWeight,12);
+await request(c,'routes/'+r.id+'/stops/'+q.id+'/result','POST',{date,outcome:'closed',note:'Local fechado QA',revision:(await get(q)).revision});
+await request(c,'routes/'+r.id+'/finish','POST',{distanceKm:2.4});
+await request(c,'routes/'+r.id+'/finish','POST',{},409);
+assert.equal((await get(p)).kg,9);assert.equal((await get(p)).status,'available');assert.equal((await get(q)).needsConfirmation,true);
+saved=(await request(c,'routes')).body.find(route=>route.id===r.id);assert.equal(saved.status,'completed');assert.equal(saved.results.length,2);
+const impact=(await request(c,'impact')).body,history=impact.collections.find(collection=>collection.routeId===r.id);
+assert.equal(history.kg,12);assert.equal(history.results.filter(i=>i.outcome==='partial').length,1);assert.equal(history.results.filter(i=>i.actualWeight===0).length,1);
+assert.equal(history.actualDistanceKm,2.4);assert.ok(impact.partialStops>=1&&impact.failedStops>=1&&impact.completedRoutes>=1);
+// Remaining stock can be collected again without a duplicate original stock row.
+await request(g,'waste/'+p.id,'PATCH',{...template,material:'Vidro',kg:9,revision:(await get(p)).revision});
+assert.equal((await request(c,'impact')).body.collections.find(col=>col.routeId===r.id).points.find(point=>point.id===p.id).material,'Papelão');
+await request(c,'waste/'+p.id+'/reserve','POST',{});await request(c,'waste/'+p.id+'/schedule','POST',{date,timeWindow:'09:00-10:00'});
+await request(c,'waste/'+p.id+'/result','POST',{date,outcome:'collected',actualWeight:8,distanceKm:1.4,revision:(await get(p)).revision});
+const histories=(await request(c,'impact')).body.collections.filter(collection=>collection.points.some(point=>point.id===p.id));assert.equal(histories.reduce((sum,col)=>sum+col.kg,0),20);assert.equal(histories.find(col=>!col.routeId).actualDistanceKm,1.4);
+// Generator withdrawal preserves the other stop and its reservation.
+const a=await create({name:template.name+' withdraw'}),b=await create({name:template.name+' preserve'});
+await request(c,'waste/'+a.id+'/reserve','POST',{});await request(c,'waste/'+b.id+'/reserve','POST',{});
+const cancelRoute=(await request(c,'routes','POST',{ids:[a.id,b.id],start:{lat:config.lat,lng:config.lng},calculate:false})).body;
+await request(g,'waste/'+a.id,'DELETE',{});
+assert.equal((await get(b)).status,'reserved');assert.equal((await request(c,'routes')).body.find(route=>route.id===cancelRoute.id).status,'draft');
+await request(c,'routes/'+cancelRoute.id+'/stops/'+a.id,'DELETE',{});
+await request(c,'routes/'+cancelRoute.id+'/schedule','POST',{date,timeWindow:'08:00-10:00',review:true});
+await request(c,'routes/'+cancelRoute.id+'/cancel','POST',{});
+assert.equal((await get(b)).status,'available');
+// During execution, changes require acknowledgement but must allow a failed stop to be reported.
+const x=await create({name:template.name+' active A'}),y=await create({name:template.name+' active B'});
+await request(c,'waste/'+x.id+'/reserve','POST',{});await request(c,'waste/'+y.id+'/reserve','POST',{});
+const execution=(await request(c,'routes','POST',{ids:[x.id,y.id],start:{lat:config.lat,lng:config.lng},calculate:false})).body;
+await request(c,'routes/'+execution.id+'/schedule','POST',{date,timeWindow:'08:00-10:00'});
+await request(c,'routes/'+execution.id+'/stops/'+x.id+'/result','POST',{date,outcome:'unsuitable',revision:(await get(x)).revision});
+assert.equal((await request(c,'routes')).body.find(route=>route.id===execution.id).status,'in_progress');
+await request(g,'waste/'+y.id,'PATCH',{...template,pickupWindows:[{day,start:'15:00',end:'18:00'}],revision:(await get(y)).revision});
+await request(c,'routes/'+execution.id+'/stops/'+y.id+'/result','POST',{date,outcome:'unavailable',revision:(await get(y)).revision},409);
+await request(c,'routes/'+execution.id+'/review','POST',{});
+await request(c,'routes/'+execution.id+'/stops/'+y.id+'/result','POST',{date,outcome:'other',revision:(await get(y)).revision});
+await request(c,'routes/'+execution.id+'/finish','POST',{});
+assert.equal((await request(c,'impact')).body.collections.find(col=>col.routeId===execution.id).kg,0);
+const cancelledSingle=await create({name:template.name+' cancelled single'});
+await request(c,'waste/'+cancelledSingle.id+'/reserve','POST',{});await request(c,'waste/'+cancelledSingle.id+'/schedule','POST',{date,timeWindow:'08:00-10:00'});
+await request(g,'waste/'+cancelledSingle.id,'DELETE',{});
+await request(c,'waste/'+cancelledSingle.id+'/result','POST',{date,outcome:'unavailable',revision:(await get(cancelledSingle)).revision},409);
+await request(c,'waste/'+cancelledSingle.id+'/result','POST',{date,outcome:'unavailable',review:true,revision:(await get(cancelledSingle)).revision});
+assert.equal((await get(cancelledSingle)).status,'cancelled');assert.equal((await get(cancelledSingle)).reservedBy,null);
+const held=await create({name:template.name+' withdrawn reservation'});await request(c,'waste/'+held.id+'/reserve','POST',{});await request(g,'waste/'+held.id,'DELETE',{});
+await request(c,'waste/'+held.id+'/release','POST',{});assert.equal((await get(held)).status,'cancelled');assert.equal((await get(held)).reservedBy,null);
+console.log('PASS reliability: windows, expiry server-side, confirmation, stale edits, concurrent reservations, review notices, permission checks, partial balance, duplicate result rejection, failed stop, finalization, actual metrics, repeated collection and withdrawal without losing other reservations.');

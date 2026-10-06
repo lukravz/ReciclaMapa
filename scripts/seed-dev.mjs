@@ -3,9 +3,9 @@ import {getPlatformProxy} from 'wrangler';
 import bcrypt from 'bcryptjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {randomBytes,randomUUID} from 'node:crypto';
-const proxy=await getPlatformProxy();
+const proxy=await getPlatformProxy({remoteBindings:false});
 try{
- if(proxy.env.APP_ENV!=='development')throw new Error('Seed permitido somente no ambiente development local.');
+ if(proxy.env.APP_ENV!=='development'&&process.env.ALLOW_LOCAL_QA!=='true')throw new Error('Seed permitido somente no ambiente development local.');
  const password=randomBytes(18).toString('base64url'),hash=await bcrypt.hash(password,12),at=new Date().toISOString(),accounts=[];
  for(const role of ['generator','cooperative','collector','admin']){
   const email=`qa-${role}@reciclamapa.invalid`,existing=await proxy.env.DB.prepare('SELECT id FROM users WHERE email=?').bind(email).first();

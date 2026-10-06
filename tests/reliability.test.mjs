@@ -1,0 +1,71 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {SQLiteSyncDialect} from 'drizzle-orm/sqlite-core';
+import {dailyLoad} from '../lib/server/daily-load.ts';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync} from 'node:fs';
+import {compatibleWindow,parseWindow,needsConfirmation,outcomeStock,defaultValidity,expiry} from '../lib/collection-reliability.ts';
+test('pickup windows check the entire window, weekday and legacy unspecified availability',()=>{
+ const windows=[{day:1,start:'08:00',end:'12:00'},{day:5,start:'14:00',end:'18:00'}];
+ assert.equal(compatibleWindow(windows,'2026-10-05','08:00-12:00'),true);
+ assert.equal(compatibleWindow(windows,'2026-10-05','11:00-13:00'),false);
+ assert.equal(compatibleWindow(windows,'2026-10-06','08:00-10:00'),false);
+ assert.equal(compatibleWindow([],'2026-10-06','08:00-10:00'),true);
+ for(const invalid of ['12:00-08:00','25:00-26:00','08:60-10:00','amanhã'])assert.equal(parseWindow(invalid),null);
+ assert.deepEqual(parseWindow('14h–16h'),{start:840,end:960});
+});
+test('expiry boundary is inclusive, legacy usable and configurable defaults bounded',()=>{
+ const at='2026-10-03T12:00:00.000Z',expiresAt=expiry(at,7);
+ assert.equal(expiresAt,'2026-10-10T12:00:00.000Z');
+ assert.equal(needsConfirmation({confirmedAt:at,expiresAt},Date.parse(expiresAt)-1),false);
+ assert.equal(needsConfirmation({confirmedAt:at,expiresAt},Date.parse(expiresAt)),true);
+ assert.equal(needsConfirmation({confirmedAt:null,expiresAt:null}),false);
+ assert.equal(needsConfirmation({confirmedAt:null,expiresAt},Date.parse(at)),true);
+ assert.equal(defaultValidity('15'),15);assert.equal(defaultValidity('100'),7);
+});
+test('partial stock replaces the estimate and failed outcomes never add recovered weight',()=>{
+ assert.deepEqual(outcomeStock('partial',12,true,9),{actualWeight:12,remainingKg:9});
+ assert.deepEqual(outcomeStock('partial',12,false,0),{actualWeight:12,remainingKg:0});
+ for(const outcome of ['closed','unavailable','unsuitable','other']){
+  assert.deepEqual(outcomeStock(outcome,0,false,0),{actualWeight:0,remainingKg:0});
+  assert.throws(()=>outcomeStock(outcome,10,false,0));
+ }
+ assert.throws(()=>outcomeStock('partial',0,true,9));
+ assert.throws(()=>outcomeStock('partial',12,true,0));
+ assert.throws(()=>outcomeStock('partial',12,false,9));
+ assert.throws(()=>outcomeStock('collected',12,true,9));
+});
+test('additive migration preserves legacy rows, reservations and transactionally flags only affected routes',()=>{
+ const db=new DatabaseSync(':memory:');db.exec('PRAGMA foreign_keys=ON');
+ const migrationDir=new URL('../migrations/',import.meta.url);
+ for(const name of readdirSync(migrationDir).filter(n=>n.endsWith('.sql')).sort())db.exec(readFileSync(new URL(name,migrationDir),'utf8'));
+ db.exec("INSERT INTO users VALUES('g','Generator','g@test.invalid','hash','generator','now','now'),('c','Coop','c@test.invalid','hash','cooperative','now','now'); INSERT INTO cooperatives(id,owner_user_id,name,address,latitude,longitude,city,state,service_radius_km,daily_capacity_kg,created_at,updated_at) VALUES('coop','c','Base','Base',-3.7,-38.5,'City','CE',20,300,'now','now')");
+ const insert=db.prepare("INSERT INTO waste_points(id,generator_user_id,generator_name,generator_type,material_type,quantity_kg,latitude,longitude,address_private,address_public,neighborhood,city,state,availability,availability_date,recurrence_type,created_at,updated_at) VALUES(?,'g','Private residence','Residência','Papelão',42,-3.7,-38.5,'private','public','Centro','City','CE','Hoje','2026-10-03','Semanal','now','now')");
+ insert.run('p');insert.run('q');
+ assert.equal(db.prepare("SELECT expires_at FROM waste_points WHERE id='p'").get().expires_at,null);
+ assert.equal(db.prepare("SELECT pickup_windows_json FROM waste_points WHERE id='p'").get().pickup_windows_json,'[]');
+ db.exec("UPDATE waste_points SET status='reserved',reserved_by='coop'; INSERT INTO routes(id,cooperative_id,status,total_weight_kg,created_at) VALUES('r','coop','draft',84,'now'); INSERT INTO route_points VALUES('rp','r','p',1,-3.7,-38.5),('rq','r','q',2,-3.7,-38.5); UPDATE waste_points SET quantity_kg=30,revision=revision+1 WHERE id='p'");
+ assert.equal(db.prepare("SELECT review_required FROM routes WHERE id='r'").get().review_required,1);
+ assert.equal(db.prepare("SELECT count(*) n FROM notifications WHERE type='material.changed'").get().n,1);
+ db.exec("UPDATE routes SET comparison_json='{}',original_distance_km=10 WHERE id='r'; UPDATE waste_points SET quantity_kg=31,revision=revision+1 WHERE id='p'");
+ assert.equal(db.prepare("SELECT comparison_json FROM routes WHERE id='r'").get().comparison_json,'{}');
+ db.exec("UPDATE waste_points SET latitude=-3.72,revision=revision+1 WHERE id='p'");
+ assert.equal(db.prepare("SELECT comparison_json FROM routes WHERE id='r'").get().comparison_json,null);
+ db.exec("UPDATE waste_points SET status='cancelled',revision=revision+1 WHERE id='p'");
+ assert.equal(db.prepare("SELECT status FROM routes WHERE id='r'").get().status,'draft');
+ assert.deepEqual({...db.prepare("SELECT status,reserved_by FROM waste_points WHERE id='q'").get()},{status:'reserved',reserved_by:'coop'});
+ const result=db.prepare("INSERT INTO stop_results(id,route_id,waste_point_id,cooperative_id,recorded_by,outcome,estimated_weight,actual_weight,date,created_at) VALUES(?,'r','q','coop','c',?,42,?,'2026-10-03','now')");
+ assert.throws(()=>result.run('bad','closed',2));result.run('good','closed',0);
+ assert.throws(()=>result.run('duplicate','closed',0));
+ insert.run('future');
+ db.exec("UPDATE waste_points SET status='scheduled',reserved_by='coop',scheduled_date='2026-10-03',time_window='08:00-10:00' WHERE id IN ('q','future'); INSERT INTO collections(id,cooperative_id,date,status,total_weight_kg,created_at) VALUES('legacy','coop','2026-10-03','completed',5,'now'); INSERT INTO collection_items VALUES('legacy-item','legacy','p',42,5,'2026-10-03')");
+ db.exec("UPDATE routes SET status='in_progress' WHERE id='r'");
+ const query=new SQLiteSyncDialect().sqlToQuery(dailyLoad('coop','2026-10-03',['future']));
+ assert.equal(db.prepare('SELECT '+query.sql+' AS load').get(...query.params).load,5);
+ const all=new SQLiteSyncDialect().sqlToQuery(dailyLoad('coop','2026-10-03',['none']));
+ assert.equal(db.prepare('SELECT '+all.sql+' AS load').get(...all.params).load,47);
+ const before=db.prepare('SELECT count(*) n FROM notifications').get().n;
+ assert.throws(()=>db.exec("BEGIN; INSERT INTO operation_guards VALUES('guard',0); UPDATE waste_points SET status='available' WHERE id='q'; COMMIT"));
+ db.exec('ROLLBACK');assert.equal(db.prepare('SELECT count(*) n FROM notifications').get().n,before);
+ db.close();
+});

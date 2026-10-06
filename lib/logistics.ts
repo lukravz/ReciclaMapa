@@ -5,9 +5,9 @@ export type Recurrence=ReturnType<typeof summarizeHistory>&{name:string;material
 export function sourceKey(p:Point){return [p.ownerId??'',p.name.trim().toLowerCase(),p.city?.toLowerCase(),p.state?.toLowerCase(),p.region.trim().toLowerCase(),p.material].join('|');}
 export function territoryKey(p:Point){return [p.state??'',p.city??'',p.region].map(s=>s.trim().toLocaleLowerCase('pt-BR')).join('|');}
 export function kgPerKm(kg:number,km:number|null){return km!==null&&Number.isFinite(km)&&km>0?kg/km:null;}
-export function eligiblePoint(p:Point,c?:Cooperative|null){return p.status==='available'&&hasDefinedLocation(p)&&(!c||(c.acceptedMaterials.includes(p.material)&&p.kg<=c.capacityKg&&calculateDistance(c,visibleLocation(p))<=c.radiusKm));}
+export function eligiblePoint(p:Point,c?:Cooperative|null){return p.status==='available'&&!p.needsConfirmation&&hasDefinedLocation(p)&&(!c||(c.acceptedMaterials.includes(p.material)&&p.kg<=c.capacityKg&&calculateDistance(c,visibleLocation(p))<=c.radiusKm));}
 export function opportunities(points:Point[],c?:Cooperative|null,history:Recurrence[]=[],now=new Date()){
- const groups=new Map<string,Point[]>();for(const p of points.filter(p=>p.status==='available')){const key=territoryKey(p);groups.set(key,[...(groups.get(key)??[]),p]);}
+ const groups=new Map<string,Point[]>();for(const p of points.filter(p=>p.status==='available'&&!p.needsConfirmation)){const key=territoryKey(p);groups.set(key,[...(groups.get(key)??[]),p]);}
  // Keep regions with historical generation visible even when current stock is empty.
  for(const h of history)if(!groups.has(territoryKey(h.point)))groups.set(territoryKey(h.point),[]);
  return [...groups].map(([key,items])=>{
